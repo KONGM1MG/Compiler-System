@@ -31,17 +31,20 @@ public:
     set<char> inputs;
     
     // 添加状态
-    void addState(int state) {
+    void addState(int state) 
+    {
         states.insert(state);
     }
     // 添加接受状态
-    void addAcceptState(int state) {
+    void addAcceptState(int state) 
+    {
         acceptStates.insert(state);
     }
-
-    // 添加转换的方法
-    void addTransition(int from, char input, int to) {
-        if (transitions.find(from) == transitions.end()) {
+    // 添加转换
+    void addTransition(int from, char input, int to) 
+    {
+        if (transitions.find(from) == transitions.end()) 
+        {
             transitions[from] = map<char, int>();
         }
         transitions[from][input] = to;
@@ -50,20 +53,25 @@ public:
     void printDFA()
     {
         cout << "DFA States:" << endl;
-        for (const auto& state : states) {
+        for (const auto& state : states) 
+        {
             cout << state;
-            if (state == startState) {
+            if (state == startState) 
+            {
                 cout << " [Start]";
             }
-            if (acceptStates.find(state) != acceptStates.end()) {
+            if (acceptStates.find(state) != acceptStates.end()) 
+            {
                 cout << " [Accept]";
             }
             cout << endl;
         }
 
         cout << "\nDFA Transitions:" << endl;
-        for (const auto& transition : transitions) {
-            for (const auto& input : transition.second) {
+        for (const auto& transition : transitions) 
+        {
+            for (const auto& input : transition.second) 
+            {
                 cout << "State " << transition.first << " with input '" << input.first << "' goes to state " << input.second << endl;
             }
         }
@@ -78,66 +86,113 @@ public:
         cout << endl;
     }
 
-    DFA minimize() {
-        map<int, int> partitions; // 将每个状态映射到其分区
-        int nextPartition = 0;
+    DFA minimize() 
+    {
+    map<int, int> partitions; 
 
-        // 初始分区
-        for (int state : states) {
-            if (acceptStates.find(state) != acceptStates.end()) {
-                partitions[state] = 0; // 接受状态分区
-            } else {
-                partitions[state] = 1; // 非接受状态分区
-            }
+    // 初始分区
+    int nonAcceptingPartition = 1;
+    int acceptingPartition = 0;
+
+    for (int state : states) 
+    {
+        if (acceptStates.find(state) != acceptStates.end()) 
+        {
+            partitions[state] = acceptingPartition; 
+        } 
+        else 
+        {
+            partitions[state] = nonAcceptingPartition; 
         }
-        nextPartition = 2;
+    }
+    int nextPartition = 2;
 
-        bool changed = true;
-        while (changed) {
-            changed = false;
-            map<int, vector<int>> newPartitions;
-
-            for (int state : states) {
-                for (char input : inputs) {
+    map<pair<int, char>, set<int>> transitionGroups;
+    
+    bool changed;
+    do 
+    {
+        changed = false;
+        map<int, int> newPartitions = partitions;
+        for (int state : states) 
+        {
+            for (char input : inputs) 
+            {
+                if(transitions[state].count(input) > 0) 
+                {
                     int targetState = transitions[state][input];
-                    int targetPartition = partitions[targetState];
-
-                    if (newPartitions.find(targetPartition) == newPartitions.end()) {
-                        newPartitions[targetPartition] = vector<int>();
-                    }
-                    newPartitions[targetPartition].push_back(state);
+                    transitionGroups[{partitions[state], input}].insert(state);
                 }
             }
+        }
 
-            for (const auto& partition : newPartitions) {
-                if (partition.second.size() > 1) {
-                    for (int state : partition.second) {
-                        partitions[state] = nextPartition++;
+        for (const auto& group : transitionGroups) 
+        {
+            if(group.second.size() == 1) continue;
+            int representativeState = *group.second.begin();
+            for (int state : group.second) 
+            {
+                bool isSame = true;
+                for (char input : inputs) 
+                {
+                    if(transitions[state].count(input) > 0 && transitions[representativeState].count(input) > 0) 
+                    {
+                        if(partitions[transitions[state][input]] != partitions[transitions[representativeState][input]]) 
+                        {
+                            isSame = false;
+                            break;
+                        }
+                    } 
+                    else if (transitions[state].count(input) != transitions[representativeState].count(input)) 
+                    {
+                        isSame = false;
+                        break;
                     }
+                }
+                if(!isSame) 
+                {
+                    newPartitions[state] = nextPartition++;
                     changed = true;
                 }
             }
         }
 
-        // 创建新的DFA
-        DFA newDFA;
-        for (int state : states) {
-            int newState = partitions[state];
-            newDFA.states.insert(newState);
-            if (state == startState) {
-                newDFA.startState = newState;
-            }
-            if (acceptStates.find(state) != acceptStates.end()) {
-                newDFA.acceptStates.insert(newState);
-            }
-            for (char input : inputs) {
-                newDFA.transitions[newState][input] = partitions[transitions[state][input]];
-            }
-        }
-        newDFA.inputs = inputs;
+        partitions = newPartitions;
+        transitionGroups.clear();
+    } while (changed);
 
-        return newDFA;
+    // 创建新的DFA
+    DFA newDFA;
+    for (int state : states) 
+    {
+        int newState = partitions[state];
+        newDFA.states.insert(newState);
+        if (state == startState) 
+        {
+            newDFA.startState = newState;
+        }
+        if (acceptStates.find(state) != acceptStates.end()) 
+        {
+            newDFA.acceptStates.insert(newState);
+        }
     }
+
+    // 重建转换
+    for (auto& trans : transitions) 
+    {
+        for (auto& inp : trans.second) 
+        {
+            newDFA.transitions[partitions[trans.first]][inp.first] = partitions[inp.second];
+        }
+    }
+
+    newDFA.inputs = inputs;
+    return newDFA;
+}
+
+
+
+
 };
 
 class NFA 
@@ -275,75 +330,13 @@ public:
         cout << endl;
     }
 
-    // 子集构造法将NFA转换为DFA
-    // map<set<int>, map<char, set<int>>> subsetConstruction()
-    // {
-    //     DFA todfa;
-    //     map<set<int>, map<char, set<int>>> dfa; // DFA状态转移表
-    //     stack<set<int>> toProcess;  // 待处理状态集
-    //     set<set<int>> processed;    // 已处理状态集
-
-    //     // 初始状态
-    //     set<int> startState;
-    //     startState.insert(se.first);    // 起点状态
-    //     set<int> startClosure = epsilonClosure(startState); // 起点状态的ε闭包
-
-    //     toProcess.push(startClosure);   // 将起点状态的ε闭包加入待处理状态集
-    //     processed.insert(startClosure); // 将起点状态的ε闭包加入已处理状态集
-
-    //     while (!toProcess.empty())
-    //     {
-    //         set<int> currentState = toProcess.top();    // 当前状态
-    //         toProcess.pop();    // 将当前状态从待处理状态集中弹出
-
-    //         map<char, set<int>> transitions;    // 当前状态的转换表
-    //         // 遍历当前状态的所有状态
-    //         for (int state : currentState)
-    //         {
-    //             // 遍历当前状态的所有边
-    //             for (auto edge : graph[state])
-    //             {
-    //                 // 如果边上有输入字符，则将该状态加入转换表
-    //                 if (edge.second != ' ')
-    //                 {
-    //                     transitions[edge.second].insert(edge.first);
-    //                 }
-    //             }
-    //         }
-    //         // 遍历转换表
-    //         for (auto transition : transitions)
-    //         {
-    //             set<int> nextState; // 下一个状态
-    //             for (int state : transition.second)
-    //             {
-    //                 nextState.insert(state);    // 将转换表中的状态加入下一个状态
-    //             }
-    //             set<int> nextClosure = epsilonClosure(nextState);   // 下一个状态的ε闭包
-                
-    //             if (processed.find(nextClosure) == processed.end())
-    //             {
-    //                 toProcess.push(nextClosure);
-    //                 processed.insert(nextClosure);
-    //             }
-
-    //             dfa[currentState][transition.first] = nextClosure;
-    //         }
-    //     }
-        
-    //     todfa.startState = epsilonClosure(startState);
-    //     todfa.acceptStates = processed;
-    //     todfa.states = processed;
-    //     todfa.transitions = dfa;
-
-    //     return dfa;
-    // }
-
     DFA subsetConstruction() 
     {
         DFA dfa;
         map<set<int>, int> stateMapping; // 将NFA状态集映射到DFA状态
-        queue<set<int>> processingQueue; // 使用队列代替栈
+        queue<set<int>> processingQueue; // 使用队列
         int dfaStateCount = 0;
+        set<char> dfaInputs; // 用于跟踪在构造过程中遇到的所有非空边字符
 
         // 初始状态
         set<int> startClosure = epsilonClosure({se.first});
@@ -351,30 +344,40 @@ public:
         stateMapping[startClosure] = dfaStateCount;
         dfa.startState = dfaStateCount;
         dfa.addState(dfaStateCount++);
-        
+
         while (!processingQueue.empty()) {
             set<int> current = processingQueue.front();
             processingQueue.pop();
             int currentStateId = stateMapping[current];
             
             // 接受状态检查
-            if (current.find(se.second) != current.end()) {
+            if (current.find(se.second) != current.end()) 
+            {
                 dfa.addAcceptState(currentStateId);
             }
 
             // 转换检查
-            for (char input : inputs) { // inputs 需要是NFA中所有的非空边字符的集合
+            for (char input : inputs) 
+            { // inputs 需要是NFA中所有的非空边字符的集合
+
                 set<int> newState;
                 for (int state : current) {
-                    for (auto edge : graph[state]) {
-                        if (edge.second == input) {
+                    for (auto edge : graph[state]) 
+                    {
+                        if (edge.second == input) 
+                        {
                             newState.insert(edge.first);
+                            if (input != ' ') // 如果输入不是epsilon-transition
+                            {
+                                dfaInputs.insert(input);
+                            }
                         }
                     }
                 }
                 set<int> newClosure = epsilonClosure(newState);
                 if (!newClosure.empty()) {
-                    if (stateMapping.find(newClosure) == stateMapping.end()) {
+                    if (stateMapping.find(newClosure) == stateMapping.end()) 
+                    {
                         stateMapping[newClosure] = dfaStateCount;
                         processingQueue.push(newClosure);
                         dfa.addState(dfaStateCount++);
@@ -383,10 +386,11 @@ public:
                 }
             }
         }
+        dfa.inputs = dfaInputs;
         return dfa;
     }
 
-
+    
     set<int> epsilonClosure(set<int> states)
     {
         set<int> closure = states;
@@ -445,6 +449,37 @@ void generateNFA_DOT(const NFA &nfa, const string &filename) {
     dotFile.close();
 }
 
+void generateDFA_DOT(const DFA& dfa, const string& filename)
+{
+    ofstream dotFile(filename);
+
+    dotFile << "digraph DFA {" << endl;
+    dotFile << "rankdir=LR;" << endl;
+    dotFile << "node [shape = circle];" << endl;
+
+    dotFile << "node [shape = doublecircle];";
+    for (int state : dfa.acceptStates) 
+    {
+        dotFile << " " << state;
+    }
+    dotFile << ";\n";
+    dotFile << "node [shape = circle];" << endl;
+
+    for (const auto& sourcePair : dfa.transitions) 
+    {
+        int sourceState = sourcePair.first;
+        for (const auto& transPair : sourcePair.second) 
+        {
+            char input = transPair.first;
+            int destState = transPair.second;
+            dotFile << "    " << sourceState << " -> " << destState << " [ label = \"" << input << "\" ];\n";
+        }
+    }
+
+    dotFile << "}" << endl;
+    dotFile.close();
+}
+
 
 
 
@@ -458,14 +493,19 @@ int main(void)
     NFA nfa(regex);
     nfa.re2Pe();
     nfa.pe2NFA();
-    nfa.printNFA();
+    //nfa.printNFA();
     generateNFA_DOT(nfa, "nfa.dot");
 
     DFA dfa = nfa.subsetConstruction();
+    for (auto a : dfa.inputs)
+    {
+        cout << a <<endl;
+    }
     dfa.printDFA();
-    dfa.minimize();
-    dfa.printDFA();
-
+    generateDFA_DOT(dfa, "dfa.dot");
+    DFA dfa1 = dfa.minimize();
+    dfa1.printDFA();
+    generateDFA_DOT(dfa1, "dfa1.dot");
     
     return 0;
 }
